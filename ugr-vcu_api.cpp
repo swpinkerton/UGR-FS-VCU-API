@@ -187,19 +187,30 @@ int ugr_vcu_api_init(char* CAN_interface, int debug, int simulate) {
 }
 
 //untouched and will not work
-void ugr_vcu_api_vcu2ai_set_data(ugr_vcu_api_ai2vcu *data) {
+void ugr_vcu_api_vcu2ai_set_data(ugr_vcu_api_vcu2ai *data) {
     // local input data buffers
+    //setup
     ugr_vcu_api_mission_status_e		t_VCU2AI_MISSION_STATUS = 0;
-    ugr_vcu_api_direction_request_e	    t_VCU2AI_DIRECTION_REQUEST = 0;
-    ugr_vcu_api_estop_request_e		    t_VCU2AI_ESTOP_REQUEST = 0;
-    ugr_vcu_api_handshake_send_bit_e	t_VCU2AI_HANDSHAKE_SEND_BIT = 0;
-    float							    t_VCU2AI_STEER_ANGLE_REQUEST_deg = 0;
-    float							    t_VCU2AI_FRONT_MOTOR_SPEED_REQUEST_rpm = 0;
-    float							    t_VCU2AI_REAR_MOTOR_SPEED_REQUEST_rpm = 0;
-    float							    t_VCU2AI_FRONT_AXLE_TORQUE_REQUEST_Nm = 0;
-    float							    t_VCU2AI_REAR_AXLE_TORQUE_REQUEST_Nm = 0;
-    float							    t_VCU2AI_FRONT_BRAKE_PRESS_REQUEST_pct = 0;
-    float							    t_VCU2AI_REAR_BRAKE_PRESS_REQUEST_pct = 0;
+    ugr_vcu_api_res_go_signal_bit_e		t_VCU2AI_RES_GO_SIGNAL = 0;
+    ugr_vcu_api_as_state_e				t_VCU2AI_AS_STATE = 0;
+    ugr_vcu_api_ami_state_e				t_VCU2AI_AMI_STATE = 0;
+    //
+    float                               t_VCU2AI_FRONT_AXLE_TORQUE_MAX_nm = 0;
+    float                               t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm = 0;
+    float                               t_VCU2AI_STEER_ANGLE_deg = 0;
+    float                               t_VCU2AI_STEER_ANGLE_MAX_deg = 0;
+    float                               t_VCU2AI_BRAKE_PRESS_F_pct = 0;
+    float                               t_VCU2AI_BRAKE_PRESS_R_pct = 0;
+    float                               t_VCU2AI_FL_WHEEL_SPEED_rpm = 0;
+    float                               t_VCU2AI_FR_WHEEL_SPEED_rpm = 0;
+    float                               t_VCU2AI_RL_WHEEL_SPEED_rpm = 0;
+    float                               t_VCU2AI_RR_WHEEL_SPEED_rpm = 0;
+    float                               t_VCU2AI_FL_PULSE_COUNT = 0;
+    float                               t_VCU2AI_FR_PULSE_COUNT = 0;
+    float                               t_VCU2AI_RL_PULSE_COUNT = 0;
+    float                               t_VCU2AI_RR_PULSE_COUNT = 0;
+
+
 
     float t_FRONT_AXLE_TORQUE_MAX_Nm = (0.1f*VCU2AI_FRONT_AXLE_TORQUE_MAX_raw);
     float t_REAR_AXLE_TORQUE_MAX_Nm = (0.1f*VCU2AI_REAR_AXLE_TORQUE_MAX_raw);
