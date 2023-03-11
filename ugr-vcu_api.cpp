@@ -186,7 +186,7 @@ int ugr_vcu_api_init(char* CAN_interface, int debug, int simulate) {
     return(EXIT_SUCCESS);
 }
 
-//untouched and will not work
+//almost complete but will not fully work yet
 void ugr_vcu_api_vcu2ai_set_data(ugr_vcu_api_vcu2ai *data) {
     // local input data buffers
     //setup
@@ -276,39 +276,39 @@ void ugr_vcu_api_vcu2ai_set_data(ugr_vcu_api_vcu2ai *data) {
 //    VCU2AI_CONES_COUNT_ACTUAL = 0;
 //    VCU2AI_CONES_COUNT_ALL = 0;
 
-    VCU2AI_STEER_REQUEST_raw = (int16_t)(10.0f*t_VCU2AI_STEER_ANGLE_REQUEST_deg);
-    VCU2AI_FRONT_MOTOR_SPEED_MAX_rpm = (uint16_t)t_VCU2AI_FRONT_MOTOR_SPEED_REQUEST_rpm;
-    VCU2AI_REAR_MOTOR_SPEED_MAX_rpm = (uint16_t)t_VCU2AI_REAR_MOTOR_SPEED_REQUEST_rpm;
-    VCU2AI_FRONT_AXLE_TRQ_REQUEST_raw = (uint16_t)(10.0f*t_VCU2AI_FRONT_AXLE_TORQUE_REQUEST_Nm);
-    VCU2AI_REAR_AXLE_TRQ_REQUEST_raw = (uint16_t)(10.0f*t_VCU2AI_REAR_AXLE_TORQUE_REQUEST_Nm);
-    VCU2AI_HYD_PRESS_F_REQ_raw = (uint8_t)(2.0f*t_VCU2AI_FRONT_BRAKE_PRESS_REQUEST_pct);
-    VCU2AI_HYD_PRESS_R_REQ_raw = (uint8_t)(2.0f*t_VCU2AI_REAR_BRAKE_PRESS_REQUEST_pct);
+//    VCU2AI_STEER_REQUEST_raw = (int16_t)(10.0f*t_VCU2AI_STEER_ANGLE_REQUEST_deg);
+//    VCU2AI_FRONT_MOTOR_SPEED_MAX_rpm = (uint16_t)t_VCU2AI_FRONT_MOTOR_SPEED_REQUEST_rpm;
+//    VCU2AI_REAR_MOTOR_SPEED_MAX_rpm = (uint16_t)t_VCU2AI_REAR_MOTOR_SPEED_REQUEST_rpm;
+//    VCU2AI_FRONT_AXLE_TRQ_REQUEST_raw = (uint16_t)(10.0f*t_VCU2AI_FRONT_AXLE_TORQUE_REQUEST_Nm);
+//    VCU2AI_REAR_AXLE_TRQ_REQUEST_raw = (uint16_t)(10.0f*t_VCU2AI_REAR_AXLE_TORQUE_REQUEST_Nm);
+//    VCU2AI_HYD_PRESS_F_REQ_raw = (uint8_t)(2.0f*t_VCU2AI_FRONT_BRAKE_PRESS_REQUEST_pct);
+//    VCU2AI_HYD_PRESS_R_REQ_raw = (uint8_t)(2.0f*t_VCU2AI_REAR_BRAKE_PRESS_REQUEST_pct);
 
     // load the CAN frames with the validated data
     volatile pack_16_t temp;
 
-    VCU2AI_Status.data[0] = (uint8_t)(VCU2AI_HANDSHAKE_BIT & 0x01);
-    VCU2AI_Status.data[1] = (uint8_t)(((VCU2AI_DIRECTION_REQUEST & 0x03) << 6) + ((VCU2AI_MISSION_STATUS & 0x03) << 4) + (VCU2AI_ESTOP_REQUEST & 0x01));
-    VCU2AI_Status.data[2] = (VCU2AI_LAP_COUNTER & 0x0F);
-    VCU2AI_Status.data[3] = VCU2AI_CONES_COUNT_ACTUAL;
-    VCU2AI_Status.data[4] = (uint8_t)(VCU2AI_CONES_COUNT_ALL & 0x00FF);
-    VCU2AI_Status.data[5] = (uint8_t)((VCU2AI_CONES_COUNT_ALL & 0xFF00) >> 8);
+    VCU2AI_Status.data[0] = (uint8_t)((VCU2AI_HANDSHAKE_BIT & 0x01));
+    VCU2AI_Status.data[1] = (uint8_t)((VCU2AI_RES_GO_SIGNAL & 0x01)<<2 );
+    VCU2AI_Status.data[2] = (uint8_t)(((VCU2AI_AMI_STATE & 0x0F) << 4) + (VCU2AI_AS_STATE & 0x0F) );
+    VCU2AI_Status.data[3] = 0;
+    VCU2AI_Status.data[4] = 0;
+    VCU2AI_Status.data[5] = 0;
     VCU2AI_Status.data[6] = 0;
     VCU2AI_Status.data[7] = 0;
 
-    temp.uword = VCU2AI_FRONT_AXLE_TRQ_REQUEST_raw;
-    VCU2AI_Drive_F.data[0] = temp.bytes[0];
-    VCU2AI_Drive_F.data[1] = temp.bytes[1];
-    temp.uword = VCU2AI_FRONT_MOTOR_SPEED_MAX_rpm;
-    VCU2AI_Drive_F.data[2] = temp.bytes[0];
-    VCU2AI_Drive_F.data[3] = temp.bytes[1];
-    VCU2AI_Drive_F.data[4] = 0;
-    VCU2AI_Drive_F.data[5] = 0;
+
+    VCU2AI_Drive_F.data[0] = 0;
+    VCU2AI_Drive_F.data[1] = 0;
+    VCU2AI_Drive_F.data[2] = 0;
+    VCU2AI_Drive_F.data[3] = 0;
+    temp.uword = VCU2AI_FRONT_AXLE_TORQUE_MAX_raw;
+    VCU2AI_Drive_F.data[4] = temp.bytes[0];
+    VCU2AI_Drive_F.data[5] = temp.bytes[1];
     VCU2AI_Drive_F.data[6] = 0;
     VCU2AI_Drive_F.data[7] = 0;
 
-    temp.uword = VCU2AI_REAR_AXLE_TRQ_REQUEST_raw;
-    VCU2AI_Drive_R.data[0] = temp.bytes[0];
+
+    VCU2AI_Drive_R.data[0] = 0;
     VCU2AI_Drive_R.data[1] = temp.bytes[1];
     temp.uword = VCU2AI_REAR_MOTOR_SPEED_MAX_rpm;
     VCU2AI_Drive_R.data[2] = temp.bytes[0];
@@ -337,6 +337,9 @@ void ugr_vcu_api_vcu2ai_set_data(ugr_vcu_api_vcu2ai *data) {
     VCU2AI_Brake.data[6] = 0;
     VCU2AI_Brake.data[7] = 0;
 
+//    VCU2AI_Wheel_speeds
+//    VCU2AI_Wheel_counts
+
     clock_gettime(CLOCK_REALTIME,&this_set);
 
     long int interval_ns = ((this_set.tv_sec-last_set.tv_sec)* 1000000000) + (this_set.tv_nsec-last_set.tv_nsec);
@@ -358,8 +361,11 @@ void fs_ai_api_get_can_stats(can_stats_t *data) {
     memcpy(data,&can_stats,sizeof(can_stats_t));
 }
 
-
 //untouched but should work
 void ugr_vcu_api_clear_can_stats() {
     memset(&can_stats, 0, sizeof(can_stats_t));
+}
+
+int ugr_vcu_api_simpletest(int a, int b){
+    return (10*(a+b));
 }
