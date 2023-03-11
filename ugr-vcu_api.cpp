@@ -69,12 +69,12 @@ static struct timespec last_set, this_set;
 
 // i believe it is {canID,#ofBytesUsed}
 static struct can_frame VCU2AI_Status		    = {0x520,3};
-static struct can_frame VCU2AI_Drive_F;         = {0x521,2};
-static struct can_frame VCU2AI_Drive_R;         = {0x522,2};
-static struct can_frame VCU2AI_Steer;           = {0x523,4};
-static struct can_frame VCU2AI_Brake;           = {0x524,2};
-static struct can_frame VCU2AI_Wheel_speeds;    = {0x525,8};
-static struct can_frame VCU2AI_Wheel_counts;    = {0x526,8};
+static struct can_frame VCU2AI_Drive_F          = {0x521,2};
+static struct can_frame VCU2AI_Drive_R          = {0x522,2};
+static struct can_frame VCU2AI_Steer            = {0x523,4};
+static struct can_frame VCU2AI_Brake            = {0x524,2};
+static struct can_frame VCU2AI_Wheel_speeds     = {0x525,8};
+static struct can_frame VCU2AI_Wheel_counts     = {0x526,8};
 
 // rx frames
 #define AI2VCU_STATUS		                0x510
@@ -103,7 +103,7 @@ static volatile boolean_e AI2VCU_Brake_fresh = FALSE;
 // TX Initialization
 // ---------------------------------------------------------
 // VCU2AI_Status
-static volatile ugr_vcu_api_handshake_receive_bit_e	VCU2AI_HANDSHAKE_RECEIVE_BIT = HANDSHAKE_RECEIVE_BIT_OFF;
+static volatile ugr_vcu_api_handshake_send_bit_e	VCU2AI_HANDSHAKE_BIT = HANDSHAKE_SEND_BIT_OFF;
 static volatile ugr_vcu_api_res_go_signal_bit_e		VCU2AI_RES_GO_SIGNAL = RES_GO_SIGNAL_NO_GO;
 static volatile ugr_vcu_api_as_state_e				VCU2AI_AS_STATE = AS_OFF;
 static volatile ugr_vcu_api_ami_state_e				VCU2AI_AMI_STATE = AMI_NOT_SELECTED;
@@ -190,10 +190,11 @@ int ugr_vcu_api_init(char* CAN_interface, int debug, int simulate) {
 void ugr_vcu_api_vcu2ai_set_data(ugr_vcu_api_vcu2ai *data) {
     // local input data buffers
     //setup
-    ugr_vcu_api_mission_status_e		t_VCU2AI_MISSION_STATUS = 0;
-    ugr_vcu_api_res_go_signal_bit_e		t_VCU2AI_RES_GO_SIGNAL = 0;
-    ugr_vcu_api_as_state_e				t_VCU2AI_AS_STATE = 0;
-    ugr_vcu_api_ami_state_e				t_VCU2AI_AMI_STATE = 0;
+    ugr_vcu_api_handshake_send_bit_e	t_VCU2AI_HANDSHAKE_SEND_BIT = HANDSHAKE_SEND_BIT_OFF;
+    ugr_vcu_api_res_go_signal_bit_e		t_VCU2AI_RES_GO_SIGNAL = RES_GO_SIGNAL_NO_GO;
+    // AS was 0 even though there is no enum for 0?
+    ugr_vcu_api_as_state_e				t_VCU2AI_AS_STATE = AS_OFF;
+    ugr_vcu_api_ami_state_e				t_VCU2AI_AMI_STATE = AMI_NOT_SELECTED;
     //
     float                               t_VCU2AI_FRONT_AXLE_TORQUE_MAX_nm = 0;
     float                               t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm = 0;
@@ -223,7 +224,7 @@ void ugr_vcu_api_vcu2ai_set_data(ugr_vcu_api_vcu2ai *data) {
     if(VCU2AI_RL_WHEEL_SPEED_rpm > t_fastest_wheel_rpm) { t_fastest_wheel_rpm = VCU2AI_RL_WHEEL_SPEED_rpm; }
     if(VCU2AI_RR_WHEEL_SPEED_rpm > t_fastest_wheel_rpm) { t_fastest_wheel_rpm = VCU2AI_RR_WHEEL_SPEED_rpm; }
 
-    t_VCU2AI_HANDSHAKE_RECEIVE_BIT = data->VCU2AI_HANDSHAKE_RECEIVE_BIT;
+    t_VCU2AI_HANDSHAKE_SEND_BIT = data->VCU2AI_HANDSHAKE_SEND_BIT;
     t_VCU2AI_RES_GO_SIGNAL = data->VCU2AI_RES_GO_SIGNAL;
     t_VCU2AI_AS_STATE = data->VCU2AI_AS_STATE;
     t_VCU2AI_AMI_STATE = data->VCU2AI_AMI_STATE;
@@ -244,15 +245,15 @@ void ugr_vcu_api_vcu2ai_set_data(ugr_vcu_api_vcu2ai *data) {
 
     // additional torque limit to maintain constant electrical power and minimise risk of over-current trip
     if(t_fastest_wheel_rpm > 700) {
-        if(t_REAR_AXLE_TORQUE_MAX_Nm > 50.0f) { t_REAR_AXLE_TORQUE_MAX_Nm = 50.0f; }
+        if(t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm > 50.0f) { t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm = 50.0f; }
     } else if(t_fastest_wheel_rpm > 600) {
-        if(t_REAR_AXLE_TORQUE_MAX_Nm > 85.0f) { t_REAR_AXLE_TORQUE_MAX_Nm = 85.0f; }
+        if(t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm > 85.0f) { t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm = 85.0f; }
     } else if(t_fastest_wheel_rpm > 500) {
-        if(t_REAR_AXLE_TORQUE_MAX_Nm > 100.0f) { t_REAR_AXLE_TORQUE_MAX_Nm = 100.0f; }
+        if(t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm > 100.0f) { t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm = 100.0f; }
     } else if(t_fastest_wheel_rpm > 400) {
-        if(t_REAR_AXLE_TORQUE_MAX_Nm > 120.0f) { t_REAR_AXLE_TORQUE_MAX_Nm = 120.0f; }
+        if(t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm > 120.0f) { t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm = 120.0f; }
     } else if(t_fastest_wheel_rpm > 300) {
-        if(t_REAR_AXLE_TORQUE_MAX_Nm > 150.0f) { t_REAR_AXLE_TORQUE_MAX_Nm = 150.0f; }
+        if(t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm > 150.0f) { t_VCU2AI_REAR_AXLE_TORQUE_MAX_nm = 150.0f; }
     }
 
     // validate the 'float' requests
@@ -309,36 +310,60 @@ void ugr_vcu_api_vcu2ai_set_data(ugr_vcu_api_vcu2ai *data) {
 
 
     VCU2AI_Drive_R.data[0] = 0;
-    VCU2AI_Drive_R.data[1] = temp.bytes[1];
-    temp.uword = VCU2AI_REAR_MOTOR_SPEED_MAX_rpm;
-    VCU2AI_Drive_R.data[2] = temp.bytes[0];
-    VCU2AI_Drive_R.data[3] = temp.bytes[1];
-    VCU2AI_Drive_R.data[4] = 0;
-    VCU2AI_Drive_R.data[5] = 0;
+    VCU2AI_Drive_R.data[1] = 0;
+    VCU2AI_Drive_R.data[2] = 0;
+    VCU2AI_Drive_R.data[3] = 0;
+    temp.uword = VCU2AI_REAR_AXLE_TORQUE_MAX_raw;
+    VCU2AI_Drive_R.data[4] = temp.bytes[0];
+    VCU2AI_Drive_R.data[5] = temp.bytes[1];
     VCU2AI_Drive_R.data[6] = 0;
     VCU2AI_Drive_R.data[7] = 0;
 
-    temp.sword = VCU2AI_STEER_REQUEST_raw;
+    temp.sword = VCU2AI_STEER_ANGLE_raw;
     VCU2AI_Steer.data[0] = temp.bytes[0];
     VCU2AI_Steer.data[1] = temp.bytes[1];
-    VCU2AI_Steer.data[2] = 0;
-    VCU2AI_Steer.data[3] = 0;
+    temp.sword = VCU2AI_STEER_ANGLE_MAX_raw;
+    VCU2AI_Steer.data[2] = temp.bytes[0];
+    VCU2AI_Steer.data[3] = temp.bytes[1];
     VCU2AI_Steer.data[4] = 0;
     VCU2AI_Steer.data[5] = 0;
     VCU2AI_Steer.data[6] = 0;
     VCU2AI_Steer.data[7] = 0;
 
-    VCU2AI_Brake.data[0] = VCU2AI_HYD_PRESS_F_REQ_raw;
-    VCU2AI_Brake.data[1] = VCU2AI_HYD_PRESS_R_REQ_raw;
-    VCU2AI_Brake.data[2] = 0;
+    VCU2AI_Brake.data[0] = VCU2AI_BRAKE_PRESS_F_raw;
+    VCU2AI_Brake.data[1] = 0;
+    VCU2AI_Brake.data[2] = VCU2AI_BRAKE_PRESS_R_raw;
     VCU2AI_Brake.data[3] = 0;
     VCU2AI_Brake.data[4] = 0;
     VCU2AI_Brake.data[5] = 0;
     VCU2AI_Brake.data[6] = 0;
     VCU2AI_Brake.data[7] = 0;
 
-//    VCU2AI_Wheel_speeds
-//    VCU2AI_Wheel_counts
+    temp.sword = VCU2AI_FL_WHEEL_SPEED_rpm;
+    VCU2AI_Wheel_speeds.data[0] = temp.bytes[0];
+    VCU2AI_Wheel_speeds.data[1] = temp.bytes[1];
+    temp.sword = VCU2AI_FR_WHEEL_SPEED_rpm;
+    VCU2AI_Wheel_speeds.data[2] = temp.bytes[0];
+    VCU2AI_Wheel_speeds.data[3] = temp.bytes[1];
+    temp.sword = VCU2AI_RL_WHEEL_SPEED_rpm;
+    VCU2AI_Wheel_speeds.data[4] = temp.bytes[0];
+    VCU2AI_Wheel_speeds.data[5] = temp.bytes[1];
+    temp.sword = VCU2AI_RR_WHEEL_SPEED_rpm;
+    VCU2AI_Wheel_speeds.data[6] = temp.bytes[0];
+    VCU2AI_Wheel_speeds.data[7] = temp.bytes[1];
+
+    temp.sword = VCU2AI_FL_PULSE_COUNT;
+    VCU2AI_Wheel_counts.data[0] = temp.bytes[0];
+    VCU2AI_Wheel_counts.data[1] = temp.bytes[1];
+    temp.sword = VCU2AI_FR_PULSE_COUNT;
+    VCU2AI_Wheel_counts.data[2] = temp.bytes[0];
+    VCU2AI_Wheel_counts.data[3] = temp.bytes[1];
+    temp.sword = VCU2AI_RL_PULSE_COUNT;
+    VCU2AI_Wheel_counts.data[4] = temp.bytes[0];
+    VCU2AI_Wheel_counts.data[5] = temp.bytes[1];
+    temp.sword = VCU2AI_RR_PULSE_COUNT;
+    VCU2AI_Wheel_counts.data[6] = temp.bytes[0];
+    VCU2AI_Wheel_counts.data[7] = temp.bytes[1];
 
     clock_gettime(CLOCK_REALTIME,&this_set);
 
@@ -352,6 +377,8 @@ void ugr_vcu_api_vcu2ai_set_data(ugr_vcu_api_vcu2ai *data) {
         can_send(&VCU2AI_Drive_R);
         can_send(&VCU2AI_Steer);
         can_send(&VCU2AI_Brake);
+        can_send(&VCU2AI_Wheel_speeds);
+        can_send(&VCU2AI_Wheel_counts);
         clock_gettime(CLOCK_REALTIME,&last_set);
     }
 }

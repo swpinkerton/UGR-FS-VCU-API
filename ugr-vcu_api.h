@@ -48,7 +48,7 @@ typedef enum ugr_vcu_api_res_go_signal_bit_e {
 
 #ifdef __cplusplus
 typedef volatile struct alignas(4) ugr_vcu_api_vcu2ai_struct {
-    volatile ugr_vcu_api_handshake_receive_bit_e	            VCU2AI_HANDSHAKE_RECEIVE_BIT;
+    volatile ugr_vcu_api_handshake_send_bit_e	            VCU2AI_HANDSHAKE_SEND_BIT;
     volatile ugr_vcu_api_res_go_signal_bit_e		            VCU2AI_RES_GO_SIGNAL;
     volatile ugr_vcu_api_as_state_e				                VCU2AI_AS_STATE;
     volatile ugr_vcu_api_ami_state_e				            VCU2AI_AMI_STATE;
@@ -69,7 +69,7 @@ typedef volatile struct alignas(4) ugr_vcu_api_vcu2ai_struct {
 } ugr_vcu_api_vcu2ai;
 #else
 typedef volatile struct ugr_vcu_api_vcu2ai_struct {
-    volatile _Alignas(4)                                        ugr_vcu_api_handshake_receive_bit_e VCU2AI_HANDSHAKE_RECEIVE_BIT;
+    volatile _Alignas(4)                                        ugr_vcu_api_handshake_send_bit_e VCU2AI_HANDSHAKE_SEND_BIT;
     volatile _Alignas(4)                                        ugr_vcu_api_res_go_signal_bit_e VCU2AI_RES_GO_SIGNAL;
     volatile _Alignas(4)                                        ugr_vcu_api_as_state_e VCU2AI_AS_STATE;
     volatile _Alignas(4)                                        ugr_vcu_api_ami_state_e VCU2AI_AMI_STATE;
@@ -118,7 +118,7 @@ typedef enum ugr_vcu_api_handshake_send_bit_e {
 
 
 #ifdef __cplusplus
-typedef volatile struct alignas(4) ugr_vcu_api_vcu2ai_struct {
+typedef volatile struct alignas(4) ugr_vcu_api_ai2vcu_struct {
     volatile ugr_vcu_api_mission_status_e		                VCU2AI_MISSION_STATUS;
     volatile ugr_vcu_api_direction_request_e	                VCU2AI_DIRECTION_REQUEST;
     volatile ugr_vcu_api_estop_request_e		                VCU2AI_ESTOP_REQUEST;
@@ -244,9 +244,9 @@ void ugr_vcu_api_vcu2ai_get_data(ugr_vcu_api_vcu2ai *data);
 
 void ugr_vcu_api_vcu2ai_set_data(ugr_vcu_api_ai2vcu *data);
 
-void ugr_vcu_api_imu_get_data(ugr_vcu_api_imu *data);
+// void ugr_vcu_api_imu_get_data(ugr_vcu_api_imu *data);
 
-void ugr_vcu_api_gps_get_data(ugr_vcu_api_gps *data);
+// void ugr_vcu_api_gps_get_data(ugr_vcu_api_gps *data);
 
 void ugr_vcu_api_get_can_stats(can_stats_t *data);
 
