@@ -41,16 +41,16 @@ typedef union can_data_t {
 
 
 //outputs
-static struct can_frame VCU2LOG_Dynamics1 = 	{0x500,8};
-static struct can_frame VCU2LOG_Status = 		{0x502,5};
-static struct can_frame VCU2AI_Status = 		{0x520,8};
-static struct can_frame VCU2AI_Drive_F = 		{0x521,6};
-static struct can_frame VCU2AI_Drive_R = 		{0x522,6};
-static struct can_frame VCU2AI_Steer = 			{0x523,6};
-static struct can_frame VCU2AI_Brake = 			{0x524,5};
-static struct can_frame VCU2AI_Speeds = 		{0x525,8};
-static struct can_frame VCU2AI_Wheel_counts = 	{0x526,8};
-static struct can_frame VCU2AI_STATUS = 		{0x120,8};
+static struct can_frame VCU2LOG_Dynamics1 		= {0x500,8};
+static struct can_frame VCU2LOG_Status 			= {0x502,5};
+static struct can_frame VCU2AI_Status 			= {0x520,8};
+static struct can_frame VCU2AI_Drive_F 			= {0x521,6};
+static struct can_frame VCU2AI_Drive_R 			= {0x522,6};
+static struct can_frame VCU2AI_Steer 			= {0x523,6};
+static struct can_frame VCU2AI_Brake 			= {0x524,5};
+static struct can_frame VCU2AI_Speeds 			= {0x525,8};
+static struct can_frame VCU2AI_Wheel_counts 	= {0x526,8};
+static struct can_frame VCU2AI_STATUS 			= {0x120,8};
 
 
 //non ai outputs
@@ -72,22 +72,22 @@ static struct can_frame AI2VCU_Brake;
 
 //non ai inputs - need to include
 
-#define Wheels2VCU_ID      	0x
-#define Inverter2VCU_ID    	0x
-#define Steer2VCU_ID       	0x
-#define Brake2VCU_ID       	0x
-#define Wheel2VCU_SPEED_ID 	0x
-#define Wheel2VCU_PULSE_ID 	0x
-#define ASSI2VCU_ID        	0x
-#define ABS2VCU_ID         	0x
-#define AMI2VCU_ID         	0x
-#define	BMS2VCU_ID			0X  //not sure which variables this sends instead of the abs ive got them all under abs for now
 
-static struct can_frame Wheels2VCU;
+#define Wheels2VCU_SPEED_ID 	0x
+#define Wheels2VCU_PULSE_ID 	0x
+#define Inverter2VCU_ID    		0x
+#define Steer2VCU_ID       		0x
+#define Brake2VCU_ID       		0x
+#define ASSI2VCU_ID        		0x
+#define ABS2VCU_ID         		0x
+#define AMI2VCU_ID     	    	0x
+#define	BMS2VCU_ID				0X  //not sure which variables this sends instead of the abs ive got them all under abs for now
+
+static struct can_frame Wheels2VCU_SPEED;
+static struct can_frame Wheels2VCU_PULSE;
 static struct can_frame Inverter2VCU;
 static struct can_frame Steer2VCU;
 static struct can_frame Brake2VCU;
-static struct can_frame Wheel2VCU;
 static struct can_frame ASSI2VCU;
 static struct can_frame ABS2VCU;
 static struct can_frame AMI2VCU;
@@ -101,11 +101,11 @@ static volatile boolean_e AI2VCU_Drive_R_fresh = FALSE;
 static volatile boolean_e AI2VCU_Steer_fresh = FALSE;
 static volatile boolean_e AI2VCU_Brake_fresh = FALSE;
 
-static volatile boolean_e Wheels2VCU_fresh = FALSE;
+static volatile boolean_e Wheels2VCU_SPEED_fresh = FALSE;
+static volatile boolean_e Wheels2VCU_PULSE_fresh = FALSE;
 static volatile boolean_e Inverter2VCU_fresh = FALSE;
 static volatile boolean_e Steer2VCU_fresh = FALSE;
 static volatile boolean_e Brake2VCU_fresh = FALSE;
-static volatile boolean_e Wheel2VCU_fresh = FALSE;
 static volatile boolean_e ASSI2VCU_fresh = FALSE;
 static volatile boolean_e ABS2VCU_fresh = FALSE;
 static volatile boolean_e AMI2VCU_fresh = FALSE;
@@ -236,7 +236,7 @@ static volatile ugr_vcu_api_as_state_e		ASSI2VCU_Vehicle_state = AS_OFF;
 
 //ABS2VCU
 
-static volatile	ugr_vcu_api_ebs_state_e		EBS2VCU_EBS_State = UNAVAILABLE;
+static volatile	ugr_vcu_api_ebs_state_e		ABS2VCU_EBS_State = UNAVAILABLE;
 
 //AMI2VCU
 
@@ -363,23 +363,18 @@ static void *can_read_thread() {
 			}
 			case ASSI2VCU_ID : {
 				ASSI2VCU.data[0] = read_frame.data[0];
-				ASSI2VCU.data[1] = read_frame.data[1];
-				ASSI2VCU.data[2] = read_frame.data[2];
 				ASSI2VCU_fresh = TRUE;
 				can_stats.ASSI2VCU_count++;
 				break;
 			}
 			case ABS2VCU_ID : {
 				ABS2VCU.data[0] = read_frame.data[0];
-				ABS2VCU.data[1] = read_frame.data[1];
 				ABS2VCU_fresh = TRUE;
 				can_stats.ABS2VCU_count++;
 				break;
 			}
 			case AMI2VCU_ID : {
 				AMI2VCU.data[0] = read_frame.data[0];
-				AMI2VCU.data[1] = read_frame.data[1];
-				AMI2VCU.data[2] = read_frame.data[2];
 				AMI2VCU_fresh = TRUE;
 				can_stats.AMI2VCU_count++;
 				break;
@@ -422,19 +417,81 @@ void ugr_vcu_api_2vcu_get_data(ugr_vcu_api_2ai *data) {
 		AI2VCU_DIRECTION_REQUEST		=	(AI2VCU_Status[1]&0b11000000) >>6;
 		AI2VCU_LAP_COUNTER				=	(AI2VCU_Status[2]&0b00001111);
 		AI2VCU_CONES_COUNT_ACTUAL		=	(AI2VCU_Status[3]);
-		AI2VCU_CONES_COUNT_ALL			=	((uint16_t)AI2VCU_Status[4]>>8 + AI2VCU_Status[5]); //does 4 or 5 go first?
+		AI2VCU_CONES_COUNT_ALL			=	((uint16_t)AI2VCU_Status[4] + AI2VCU_Status[5]<<8); //does 4 or 5 go first?
 		AI2VCU_VEH_SPEED_ACTUAL			=	(AI2VCU_Status[6]);
 		AI2VCU_VEH_SPEED_DEMAND			=	(AI2VCU_Status[7]);
 	}
 	if (AI2VCU_Drive_F_fresh){
 		AI2VCU_Drive_F_fresh			=	FALSE;
-		AI2VCU_FRONT_AXLE_TRQ_REQUEST	=	((uint16_t)AI2VCU_Drive_F[0]>>8 + AI2VCU_Drive_F[1]);
-		AI2VCU_FRONT_MOTOR_SPEED_MAX	=	((uint16_t)AI2VCU_Drive_F[2]>>8 + AI2VCU_Drive_F[3]);
+		AI2VCU_FRONT_AXLE_TRQ_REQUEST	=	((uint16_t)AI2VCU_Drive_F[0] + AI2VCU_Drive_F[1]<<8);
+		AI2VCU_FRONT_MOTOR_SPEED_MAX	=	((uint16_t)AI2VCU_Drive_F[2] + AI2VCU_Drive_F[3]<<8);
 	}
 	if (AI2VCU_Drive_R_fresh){
-		AI2VCU_REAR_AXLE_TRQ_REQUEST	=	((uint16_t)AI2VCU_Drive_R[0]>>8 + AI2VCU_Drive_R[1]);
-		AI2VCU_REAR_MOTOR_SPEED_MAX		=	((uint16_t)AI2VCU_Drive_R[2]>>8 + AI2VCU_Drive_R[3]);
+		AI2VCU_Drive_R_fresh			=	FALSE;
+		AI2VCU_REAR_AXLE_TRQ_REQUEST	=	((uint16_t)AI2VCU_Drive_R[0] + AI2VCU_Drive_R[1]<<8);
+		AI2VCU_REAR_MOTOR_SPEED_MAX		=	((uint16_t)AI2VCU_Drive_R[2] + AI2VCU_Drive_R[3]<<8);
+	}
+	if (AI2VCU_Steer){
+		AI2VCU_Steer_fresh				=	FALSE;
+		AI2VCU_STEER_REQUEST_deg		=	((int16_t)AI2VCU_Steer[0] + AI2VCU_Steer[1]<<8);
+	}
+	if (AI2VCU_Brake){
+		AI2VCU_Brake_fresh				=	FALSE;
+		AI2VCU_HYD_PRESS_F_REQ_pct		=	(AI2VCU_Brake[0]);
+		AI2VCU_HYD_PRESS_R_REQ_pct		=	(AI2VCU_Brake[0]);
 	}
 	
+	//Non AI inputs
+
+	//sends 9 bytes not sure if I should add a seperate message just for speed_actual_kmh
+	if (Wheels2VCU_SPEED){
+		Wheels2VCU_SPEED_fresh			=	FALSE;
+		Wheels2VCU_Speed_actual_kmh		=	Wheels2VCU_SPEED[0];
+		Wheels2VCU_FL_WHEEL_SPEED		=	((uint16_t) Wheels2VCU_SPEED[1] + Wheels2VCU_SPEED[2]<<8);
+		Wheels2VCU_FR_WHEEL_SPEED		=	((uint16_t) Wheels2VCU_SPEED[3] + Wheels2VCU_SPEED[4]<<8);
+		Wheels2VCU_RL_WHEEL_SPEED		=	((uint16_t) Wheels2VCU_SPEED[5] + Wheels2VCU_SPEED[6]<<8);
+		Wheels2VCU_RR_WHEEL_SPEED		=	((uint16_t) Wheels2VCU_SPEED[7] + Wheels2VCU_SPEED[8]<<8);
+	}
+	if (Wheels2VCU_PULSE){
+		Wheels2VCU_PULSE_fresh			=	FALSE;
+		Wheels2VCU_FL_PULSE_COUNT		= 	((uint16_t) Wheels2VCU_PULSE[0] + Wheels2VCU_PULSE[1]<<8);
+		Wheels2VCU_FR_PULSE_COUNT		= 	((uint16_t) Wheels2VCU_PULSE[2] + Wheels2VCU_PULSE[3]<<8);
+		Wheels2VCU_RL_PULSE_COUNT		= 	((uint16_t) Wheels2VCU_PULSE[4] + Wheels2VCU_PULSE[5]<<8);
+		Wheels2VCU_RR_PULSE_COUNT		= 	((uint16_t) Wheels2VCU_PULSE[6] + Wheels2VCU_PULSE[7]<<8);
+	}
+	if (Inverter2VCU){
+		Inverter2VCU_fresh				=	FALSE;
+		Inverter2VCU_Drive_trq_actual	=	(int8_t) Inverter2VCU[0];	//not sure if need to say its signed
+		Inverter2VCU_FRONT_AXLE_TRQ		=	((int16_t) Inverter2VCU[1] + Inverter2VCU[2]<<8);
+		Inverter2VCU_REAR_AXLE_TRQ		=	((int16_t) Inverter2VCU[3] + Inverter2VCU[4]<<8);
+	}
+	if (Steer2VCU){
+		Steer2VCU_fresh					=	FALSE;
+		Steer2VCU_Steer_actual_deg		=	(int8_t) Steer2VCU[0];
+		Steer2VCU_ANGLE					=	((int16_t) Steer2VCU[1] + Steer2VCU[2]);
+	}
+	if (Brake2VCU){
+		Brake2VCU_fresh					=	FALSE;
+		Brake2VCU_Brake_actual_pct		=	Brake2VCU[0];
+		Brake2VCU_HYD_PRESS_F_pct		=	Brake2VCU[1];
+		Brake2VCU_HYD_PRESS_R_pct		=	Brake2VCU[2];
+		Brake2VCU_STATUS_BRK			=	(Brake2VCU[3]&0b00000111); //not sure if these 2 are 2 nibbles or what
+		Brake2VCU_STATUS_EBS			=	(Brake2VCU[3]&0b00110000)>>4; //or 11000000 >> 6?
+	}
+	if (ASSI){
+		ASSI2VCU_fresh					=	FALSE;
+		ASSI2VCU_Vehicle_state			=	(ASSI2VCU[0]&0b00000111);
+	}
+	if (ABS){
+		ABS2VCU_fresh					=	FALSE;
+		ABS2VCU_EBS_State				=	(ABS2VCU[0]&0b00000011);
+	}
+	if(AMI){
+		AMI2VCU_fresh					=	FALSE;
+		AMI2VCU_AMI_STATE				=	(AMI2VCU[0]&0b00000111);
+	}
+
+
+
 
 }
