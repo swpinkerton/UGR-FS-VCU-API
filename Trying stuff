@@ -1,0 +1,440 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+#include <string.h>
+
+#include <unistd.h>
+#include <pthread.h>
+
+#include <time.h>
+
+#include "can.h"
+
+#include "fs-ai_api.h"
+
+typedef enum boolean_e {
+	FALSE = 0,
+	TRUE = 1,
+} boolean_e;
+
+typedef struct pack_16_t {
+	union {
+		volatile uint16_t uword;
+		volatile int16_t sword;
+		volatile uint8_t bytes[2];
+	};
+} pack_16_t;
+
+typedef union can_data_t {
+	volatile uint8_t ubytes[8];
+	volatile int8_t sbytes[8];
+	volatile uint16_t uwords[4];
+	volatile int16_t swords[4];
+	volatile uint32_t ulongs[2];
+	volatile int32_t slongs[2];
+	volatile float floats[2];
+	volatile uint64_t ulongs[4];
+	volatile uint4_t ubytes[4];
+	volatile int4_t sbytes[4];
+} can_data_t;
+
+
+//outputs
+static struct can_frame VCU2LOG_Dynamics1 = 	{0x500,8};
+static struct can_frame VCU2LOG_Status = 		{0x502,5};
+static struct can_frame VCU2AI_Status = 		{0x520,8};
+static struct can_frame VCU2AI_Drive_F = 		{0x521,6};
+static struct can_frame VCU2AI_Drive_R = 		{0x522,6};
+static struct can_frame VCU2AI_Steer = 			{0x523,6};
+static struct can_frame VCU2AI_Brake = 			{0x524,5};
+static struct can_frame VCU2AI_Speeds = 		{0x525,8};
+static struct can_frame VCU2AI_Wheel_counts = 	{0x526,8};
+static struct can_frame VCU2AI_STATUS = 		{0x120,8};
+
+
+//non ai outputs
+static struct can_frame VCU2Inverter = 			{0x};
+static struct can_frame VCU2Steer = 			{0x};
+
+//inputs
+#define AI2VCU_Status_ID   	0x510
+#define AI2VCU_Drive_F_ID  	0x511
+#define AI2VCU_Drive_R_ID  	0x512
+#define AI2VCU_Steer_ID    	0x513
+#define AI2VCU_Brake_ID    	0x514
+
+static struct can_frame AI2VCU_Status;
+static struct can_frame AI2VCU_Drive_F;
+static struct can_frame AI2VCU_Drive_R;
+static struct can_frame AI2VCU_Steer;
+static struct can_frame AI2VCU_Brake;
+
+//non ai inputs - need to include
+
+#define Wheels2VCU_ID      	0x
+#define Inverter2VCU_ID    	0x
+#define Steer2VCU_ID       	0x
+#define Brake2VCU_ID       	0x
+#define Wheel2VCU_SPEED_ID 	0x
+#define Wheel2VCU_PULSE_ID 	0x
+#define ASSI2VCU_ID        	0x
+#define ABS2VCU_ID         	0x
+#define AMI2VCU_ID         	0x
+#define	BMS2VCU_ID			0X  //not sure which variables this sends instead of the abs ive got them all under abs for now
+
+static struct can_frame Wheels2VCU;
+static struct can_frame Inverter2VCU;
+static struct can_frame Steer2VCU;
+static struct can_frame Brake2VCU;
+static struct can_frame Wheel2VCU;
+static struct can_frame ASSI2VCU;
+static struct can_frame ABS2VCU;
+static struct can_frame AMI2VCU;
+
+//static local data - already done
+static can_stats_t  can_stats;
+
+static volatile boolean_e AI2VCU_Status_fresh = FALSE;
+static volatile boolean_e AI2VCU_Drive_F_fresh = FALSE;
+static volatile boolean_e AI2VCU_Drive_R_fresh = FALSE;
+static volatile boolean_e AI2VCU_Steer_fresh = FALSE;
+static volatile boolean_e AI2VCU_Brake_fresh = FALSE;
+
+static volatile boolean_e Wheels2VCU_fresh = FALSE;
+static volatile boolean_e Inverter2VCU_fresh = FALSE;
+static volatile boolean_e Steer2VCU_fresh = FALSE;
+static volatile boolean_e Brake2VCU_fresh = FALSE;
+static volatile boolean_e Wheel2VCU_fresh = FALSE;
+static volatile boolean_e ASSI2VCU_fresh = FALSE;
+static volatile boolean_e ABS2VCU_fresh = FALSE;
+static volatile boolean_e AMI2VCU_fresh = FALSE;
+
+
+
+//FUNCTIONS BELOW ARE NEEDED STILL
+
+//VCU2LOG_DYNAMICS
+
+static volatile uint8_t         VCU2LOG_Speed_actual_kmh = 0;
+static volatile uint8_t         VCU2LOG_Speed_target_kmh = 0;
+static volatile int8_t          VCU2LOG_Steer_actual_deg = 0;
+static volatile int8_t          VCU2LOG_Steer_target_deg = 0;
+static volatile uint8_t         VCU2LOG_Brake_actual_pct = 0;
+static volatile uint8_t         VCU2LOG_Brake_target_pct = 0;
+static volatile int8_t          VCU2LOG_Drive_trq_actual_pct = 0;
+static volatile int8_t          VCU2LOG_Drive_trq_target_pct = 0;
+
+//VCU2LOG_Status
+
+static volatile UGR_FS_VCU_API_State_ASSI			VCU2LOG_State_ASSI = AS_OFF;
+static volatile	UGR_FS_VCU_API_State_EBS			VCU2LOG_State_EBS = armed;
+static volatile	UGR_FS_VCU_API_AMI_STATE			VCU2LOG_AMI_STATE = not_selected;
+//end 8 bits, start 64 bits
+static volatile	UGR_FS_VCU_API_State_steering		VCU2LOG_State_steering = off;
+static volatile	UGR_FS_VCU_API_State_service_brake	VCC2LOG_State_service_brake = disengaged;
+static volatile uint4_t								VCU2LOG_Lap_counter = 0;
+static volatile uint8_t								VCU2LOG_Cones_count_actual = 0;
+static volatile uint16_t							VCU2LOG_Cones_count_actual = 0;
+//not sure how to format this as I think cones_count_actual needs to be 17 bits & lap counter is 4 bits 
+// - whole thing should be done as 8 bits then 64 bits
+
+//I see that the warning/fault ones havent been added - do they not need adding for completeness/logging?
+//Also does VCU_STATUS need anything done with it?
+
+//NON-AI outputs
+
+//VCU2Inverter  -  dont think seperate messages are needed, so just using the 1
+
+static volatile uint16_t	VCU2Inverter_FRONT_AXLE_TRQ_REQUEST = 0;
+static volatile uint16_t	VCU2Inverter_FRONT_MOTOR_SPEED_MAX = 0;
+static volatile uint16_t	VCU2Inverter_REAR_AXLE_TRQ_REQUEST = 0;
+static volatile uint16_t	VCU2Inverter_REAR_MOTOR_SPEED_MAX = 0;
+
+
+//VCU2Steer  -  again only 1 message
+
+static volatile int16_t		VCU2Steer_STEER_REQUEST_deg = 0;
+
+
+//INPUTS
+
+//some variables have _raw or _units at the end, not sure which ones are required
+
+//AI2VCU_Status
+
+static volatile ugr_vcu_api_handshake_send_bit_e		AI2VCU_HANDSHAKE_BIT = HANDSHAKE_SEND_BIT_OFF;
+static volatile ugr_vcu_api_estop_request_e				AI2VCU_ESTOP_REQUEST = ESTOP_NO;
+static volatile ugr_vcu_api_mission_status_e			AI2VCU_MISSION_STATUS = MISSION_NOT_SELECTED;
+static volatile ugr_vcu_api_direction_request_e			AI2VCU_DIRECTION_REQUEST = DIRECTION_NEUTRAL;
+static volatile uint8_t									AI2VCU_LAP_COUNTER = 0;
+static volatile uint8_t									AI2VCU_CONES_COUNT_ACTUAL = 0;
+static volatile uint16_t								AI2VCU_CONES_COUNT_ALL = 0;
+static volatile uint8_t									AI2VCU_VEH_SPEED_ACTUAL = 0;
+static volatile uint8_t									AI2VCU_VEH_SPEED_DEMAND = 0;
+
+//AI2VCU_Drive_F
+
+static volatile uint16_t 	AI2VCU_FRONT_AXLE_TRQ_REQUEST = 0;
+static volatile uint16_t 	AI2VCU_FRONT_MOTOR_SPEED_MAX = 0;
+
+// AI2VCU_Drive_R
+
+static volatile uint16_t 	AI2VCU_REAR_AXLE_TRQ_REQUEST = 0;
+static volatile uint16_t 	AI2VCU_REAR_MOTOR_SPEED_MAX = 0;
+
+// AI2VCU_Steer
+
+static volatile int16_t 	AI2VCU_STEER_REQUEST_deg = 0;
+
+// AI2VCU_Brake
+
+static volatile uint8_t 	AI2VCU_HYD_PRESS_F_REQ_pct = 0;
+static volatile uint8_t 	AI2VCU_HYD_PRESS_R_REQ_pct = 0;
+
+//NON AI INPUTS
+
+//Wheels2VCU_SPEED (idk if these next 2 should be sent as 2 messages or not)
+
+static volatile uint8_t		Wheels2VCU_Speed_actual_kmh = 0; //may get this from inverter idk
+static volatile uint16_t	Wheels2VCU_FL_WHEEL_SPEED = 0;
+static volatile uint16_t	Wheels2VCU_FR_WHEEL_SPEED = 0;
+static volatile uint16_t	Wheels2VCU_RL_WHEEL_SPEED = 0;
+static volatile uint16_t	Wheels2VCU_RR_WHEEL_SPEED = 0;
+
+//Wheels2VCU_PULSE
+
+static volatile uint16_t	Wheels2VCU_FL_PULSE_COUNT = 0;
+static volatile uint16_t	Wheels2VCU_FR_PULSE_COUNT = 0;
+static volatile uint16_t	Wheels2VCU_RL_PULSE_COUNT = 0;
+static volatile uint16_t	Wheels2VCU_RR_PULSE_COUNT = 0;
+
+//Inverter2VCU
+
+//static volatile uint8_t	Inverter2VCU_Speed_actual_kmh = 0;
+static volatile int8_t		Inverter2VCU_Drive_trq_actual = 0;
+static volatile int16_t		Inverter2VCU_FRONT_AXLE_TRQ = 0;
+static volatile int16_t		Inverter2VCU_REAR_AXLE_TRQ = 0;
+
+//Steer2VCU
+
+static volatile int8_t		Steer2VCU_Steer_actual_deg = 0;
+static volatile int16_t		Steer2VCU_ANGLE = 0;
+//not sure what the difference is apart from different lengths, top one needed for log, bottom for VCU2AI_Steer
+
+//Brake2VCU
+
+static volatile uint8_t						Brake2VCU_Brake_actual_pct = 0;
+static volatile uint8_t						Brake2VCU_HYD_PRESS_F_pct = 0;
+static volatile uint8_t						Brake2VCU_HYD_PRESS_R_pct = 0;
+static volatile ugr_vcu_api_brake_state_e	Brake2VCU_STATUS_BRK = INITIALISING;
+static volatile ugr_vcu_api_ebs_state_e		Brake2VCU_STATUS_EBS = UNAVAILABLE;
+
+//ASSI2VCU
+
+static volatile ugr_vcu_api_as_state_e		ASSI2VCU_Vehicle_state = AS_OFF;
+
+//ABS2VCU
+
+static volatile	ugr_vcu_api_ebs_state_e		EBS2VCU_EBS_State = UNAVAILABLE;
+
+//AMI2VCU
+
+static volatile	ugr_vcu_api_ami_state_e		AMI2VCU_AMI_STATE = AMI_NOT_SELECTED;
+
+
+
+//functions
+
+//read function
+
+
+static void *can_read_thread() {
+	struct can_frame read_frame;
+	
+	while(1)
+	{
+		if(can_read(&read_frame) < 0) {
+			if(debug_mode) { printf("CAN read error!\r\n"); }
+		}
+
+		pthread_mutex_lock(&can_read_mutex); // protect the buffers from race conditions
+
+		switch(read_frame.can_id) {
+			case AI2VCU_Status_ID : {
+				AI2VCU_Status.data[0] = read_frame.data[0];
+				AI2VCU_Status.data[1] = read_frame.data[1];
+				AI2VCU_Status.data[2] = read_frame.data[2];
+				AI2VCU_Status.data[3] = read_frame.data[3];
+				AI2VCU_Status.data[4] = read_frame.data[4];
+				AI2VCU_Status.data[5] = read_frame.data[5];
+				AI2VCU_Status.data[6] = read_frame.data[6];
+				AI2VCU_Status.data[7] = read_frame.data[7];
+				AI2VCU_Status_fresh = TRUE;
+				can_stats.AI2VCU_Status_count++;
+				break;
+			}
+			case AI2VCU_Drive_F_ID : {
+				AI2VCU_Drive_F.data[0] = read_frame.data[0];
+				AI2VCU_Drive_F.data[1] = read_frame.data[1];
+				AI2VCU_Drive_F.data[2] = read_frame.data[2];
+				AI2VCU_Drive_F.data[3] = read_frame.data[3];
+				AI2VCU_Drive_F_fresh = TRUE;
+				can_stats.AI2VCU_Drive_F_count++;
+				break;
+			}
+			case AI2VCU_Drive_R_ID : {
+				AI2VCU_Drive_R.data[0] = read_frame.data[0];
+				AI2VCU_Drive_R.data[1] = read_frame.data[1];
+				AI2VCU_Drive_R.data[2] = read_frame.data[2];
+				AI2VCU_Drive_R.data[3] = read_frame.data[3];
+				AI2VCU_Drive_R_fresh = TRUE;
+				can_stats.AI2VCU_Drive_R_count++;
+				break;
+			}
+			case AI2VCU_Steer_ID : {
+				AI2VCU_Steer.data[0] = read_frame.data[0];
+				AI2VCU_Steer.data[1] = read_frame.data[1];
+				AI2VCU_Steer_fresh = TRUE;
+				can_stats.AI2VCU_Steer_count++;
+				break;
+			}
+			case AI2VCU_Brake_ID : {
+				AI2VCU_Brake.data[0] = read_frame.data[0];
+				AI2VCU_Brake.data[1] = read_frame.data[1];
+				AI2VCU_Brake_fresh = TRUE;
+				can_stats.AI2VCU_Brake_count++;
+				break;
+			}
+			case Wheels2VCU_SPEED_ID : {
+				Wheels2VCU_SPEED.data[0] = read_frame.data[0];
+				Wheels2VCU_SPEED.data[1] = read_frame.data[1];
+				Wheels2VCU_SPEED.data[2] = read_frame.data[2];
+				Wheels2VCU_SPEED.data[3] = read_frame.data[3];
+				Wheels2VCU_SPEED.data[4] = read_frame.data[4];
+				Wheels2VCU_SPEED.data[5] = read_frame.data[5];
+				Wheels2VCU_SPEED.data[6] = read_frame.data[6];
+				Wheels2VCU_SPEED.data[7] = read_frame.data[7];
+				Wheels2VCU_SPEED.data[8] = read_frame.data[8];
+				Wheels2VCU_SPEED_fresh = TRUE;
+				can_stats.Wheels2VCU_SPEED_count++;
+				break;
+			}
+			case Wheels2VCU_PULSE_ID : {
+				Wheels2VCU_PULSE.data[0] = read_frame.data[0];
+				Wheels2VCU_PULSE.data[1] = read_frame.data[1];
+				Wheels2VCU_PULSE.data[2] = read_frame.data[2];
+				Wheels2VCU_PULSE.data[3] = read_frame.data[3];
+				Wheels2VCU_PULSE.data[4] = read_frame.data[4];
+				Wheels2VCU_PULSE.data[5] = read_frame.data[5];
+				Wheels2VCU_PULSE.data[6] = read_frame.data[6];
+				Wheels2VCU_PULSE.data[7] = read_frame.data[7];
+				Wheels2VCU_PULSE_fresh = TRUE;
+				can_stats.Wheels2VCU_PULSE_count++;
+				break;
+			}
+			case Inverter2VCU_ID : {
+				Inverter2VCU.data[0] = read_frame.data[0];
+				Inverter2VCU.data[1] = read_frame.data[1];
+				Inverter2VCU.data[2] = read_frame.data[2];
+				Inverter2VCU.data[3] = read_frame.data[3];
+				Inverter2VCU.data[4] = read_frame.data[4];
+				Inverter2VCU_fresh = TRUE;
+				can_stats.Inverter2VCU_count++;
+				break;
+			}
+			case Steer2VCU_ID : {
+				Steer2VCU.data[0] = read_frame.data[0];
+				Steer2VCU.data[1] = read_frame.data[1];
+				Steer2VCU.data[2] = read_frame.data[2];
+				Steer2VCU_fresh = TRUE;
+				can_stats.Steer2VCU_count++;
+				break;
+			}
+			case Brake2VCU_ID : {
+				Brake2VCU.data[0] = read_frame.data[0];
+				Brake2VCU.data[1] = read_frame.data[1];
+				Brake2VCU.data[2] = read_frame.data[2];
+				Brake2VCU.data[3] = read_frame.data[3];
+				Brake2VCU.data[4] = read_frame.data[4];
+				Brake2VCU_fresh = TRUE;
+				can_stats.Brake2VCU_count++;
+				break;
+			}
+			case ASSI2VCU_ID : {
+				ASSI2VCU.data[0] = read_frame.data[0];
+				ASSI2VCU.data[1] = read_frame.data[1];
+				ASSI2VCU.data[2] = read_frame.data[2];
+				ASSI2VCU_fresh = TRUE;
+				can_stats.ASSI2VCU_count++;
+				break;
+			}
+			case ABS2VCU_ID : {
+				ABS2VCU.data[0] = read_frame.data[0];
+				ABS2VCU.data[1] = read_frame.data[1];
+				ABS2VCU_fresh = TRUE;
+				can_stats.ABS2VCU_count++;
+				break;
+			}
+			case AMI2VCU_ID : {
+				AMI2VCU.data[0] = read_frame.data[0];
+				AMI2VCU.data[1] = read_frame.data[1];
+				AMI2VCU.data[2] = read_frame.data[2];
+				AMI2VCU_fresh = TRUE;
+				can_stats.AMI2VCU_count++;
+				break;
+			}
+			//case BMS2VCU_ID : {
+				//not sure whether this is instead of ABS or smth
+			//}
+			default :
+			{
+				// TODO: set up filters so all unhandled CAN frames don't end up here...
+				//idk
+				can_stats.unhandled_frame_count++;
+				break;
+			}
+		
+		}
+
+		pthread_mutex_unlock(&can_read_mutex);	// don't forget!
+		//idk what not to forget hope its not important
+
+
+	}
+
+
+}
+
+
+//GET DATA
+
+//dont want to say ai2vcu as itll include external stuff too
+void ugr_vcu_api_2vcu_get_data(ugr_vcu_api_2ai *data) {
+	pthread_mutex_lock(&can_read_mutex); // protect the buffers from race conditions
+
+	// decode the CAN buffers if fresh data present
+	if (AI2VCU_Status_fresh){
+		AI2VCU_Status_fresh				= 	FALSE;
+		AI2VCU_HANDSHAKE_BIT			=	(AI2VCU_Status[0]&0b00000001);
+		AI2VCU_ESTOP_REQUEST			=	(AI2VCU_Status[1]&0b00000001);
+		AI2VCU_MISSION_STATUS			=	(AI2VCU_Status[1]&0b00110000) >>4;
+		AI2VCU_DIRECTION_REQUEST		=	(AI2VCU_Status[1]&0b11000000) >>6;
+		AI2VCU_LAP_COUNTER				=	(AI2VCU_Status[2]&0b00001111);
+		AI2VCU_CONES_COUNT_ACTUAL		=	(AI2VCU_Status[3]);
+		AI2VCU_CONES_COUNT_ALL			=	((uint16_t)AI2VCU_Status[4]>>8 + AI2VCU_Status[5]); //does 4 or 5 go first?
+		AI2VCU_VEH_SPEED_ACTUAL			=	(AI2VCU_Status[6]);
+		AI2VCU_VEH_SPEED_DEMAND			=	(AI2VCU_Status[7]);
+	}
+	if (AI2VCU_Drive_F_fresh){
+		AI2VCU_Drive_F_fresh			=	FALSE;
+		AI2VCU_FRONT_AXLE_TRQ_REQUEST	=	((uint16_t)AI2VCU_Drive_F[0]>>8 + AI2VCU_Drive_F[1]);
+		AI2VCU_FRONT_MOTOR_SPEED_MAX	=	((uint16_t)AI2VCU_Drive_F[2]>>8 + AI2VCU_Drive_F[3]);
+	}
+	if (AI2VCU_Drive_R_fresh){
+		AI2VCU_REAR_AXLE_TRQ_REQUEST	=	((uint16_t)AI2VCU_Drive_R[0]>>8 + AI2VCU_Drive_R[1]);
+		AI2VCU_REAR_MOTOR_SPEED_MAX		=	((uint16_t)AI2VCU_Drive_R[2]>>8 + AI2VCU_Drive_R[3]);
+	}
+	
+
+}
